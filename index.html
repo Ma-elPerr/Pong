@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Futuristic Pong</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        body {
+            background-color: #0d0d0d;
+            color: #00ffde;
+            font-family: 'Orbitron', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        h1 {
+            font-size: 4em;
+            text-shadow: 0 0 10px #00ffde, 0 0 20px #00ffde, 0 0 30px #00ffde;
+        }
+
+        canvas {
+            background-color: #0d0d0d;
+            border: 2px solid #00ffde;
+            box-shadow: 0 0 20px #00ffde;
+        }
+
+        #score {
+            font-size: 3em;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #00ffde;
+        }
+
+        #credits {
+            margin-top: 30px;
+            font-size: 1.2em;
+            color: #ff00ff;
+            text-shadow: 0 0 5px #ff00ff;
+        }
+
+        #options button {
+            background-color: transparent;
+            border: 2px solid #00ffde;
+            color: #00ffde;
+            padding: 10px 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5em;
+            margin: 0 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #options button:hover {
+            background-color: #00ffde;
+            color: #0d0d0d;
+            box-shadow: 0 0 15px #00ffde;
+        }
+    </style>
+</head>
+<body>
+    <h1>Futuristic Pong</h1>
+    <div id="options">
+        <button id="1p">1 Player</button>
+        <button id="2p">2 Players</button>
+    </div>
+    <div id="score">0 - 0</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="credits">Created by Ma'el Perr</div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game objects
+        const paddleWidth = 10;
+        const paddleHeight = 100;
+
+        const player1 = {
+            x: 0,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            color: '#00ffde',
+            score: 0,
+            powerUps: [],
+            frozen: false
+        };
+
+        const player2 = {
+            x: canvas.width - paddleWidth,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            color: '#00ffde',
+            score: 0,
+            powerUps: [],
+            frozen: false
+        };
+
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            speed: 5,
+            velocityX: 5,
+            velocityY: 5,
+            color: '#ff00ff'
+        };
+
+        // Draw functions
+        function drawRect(x, y, w, h, color) {
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 20;
+            ctx.fillRect(x, y, w, h);
+        }
+
+        function drawCircle(x, y, r, color) {
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2, false);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawText(text, x, y, color) {
+            ctx.fillStyle = color;
+            if (!countdown > 0) {
+                ctx.font = '45px Orbitron';
+            }
+            ctx.fillText(text, x, y);
+        }
+
+        // Game loop
+        function gameLoop() {
+            // Update game objects
+            update();
+
+            // Render game objects
+            render();
+
+            // Call gameLoop again
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Update function
+        function update() {
+            handleInput();
+
+            if (!isGameStarted) return;
+
+            // Prevent paddles from going out of bounds
+            if (player1.y < 0) player1.y = 0;
+            if (player1.y + player1.height > canvas.height) player1.y = canvas.height - player1.height;
+            if (player2.y < 0) player2.y = 0;
+            if (player2.y + player2.height > canvas.height) player2.y = canvas.height - player2.height;
+
+            // Increase ball speed over time
+            if (Date.now() - lastGoalTime > 5000) {
+                ball.speed += 0.01;
+            }
+
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+
+            // Ball collision with top and bottom walls
+            if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) {
+                ball.velocityY = -ball.velocityY;
+            }
+
+            // Ball collision with paddles
+            let player = (ball.x < canvas.width / 2) ? player1 : player2;
+            if (collision(ball, player)) {
+                // Ball hit the paddle
+                let collidePoint = (ball.y - (player.y + player.height / 2));
+                collidePoint = collidePoint / (player.height / 2);
+
+                let angleRad = (Math.PI / 4) * collidePoint;
+
+                let direction = (ball.x < canvas.width / 2) ? 1 : -1;
+
+                ball.velocityX = direction * ball.speed * Math.cos(angleRad);
+                ball.velocityY = ball.speed * Math.sin(angleRad);
+            }
+
+            // Power-up collision
+            powerUps.forEach((powerUp, index) => {
+                if (collision(powerUp, player1)) {
+                    handlePowerUpCollection(powerUp, player1, index);
+                } else if (collision(powerUp, player2)) {
+                    handlePowerUpCollection(powerUp, player2, index);
+                }
+            });
+
+            // AI for CPU
+            if (gameMode === '1p' && !player2.frozen) {
+                player2.y += ((ball.y - (player2.y + player2.height / 2))) * cpuLevel;
+            }
+
+            // Scoring
+            if (ball.x - ball.radius < 0) {
+                player2.score++;
+                updateDifficulty();
+                resetBall();
+            } else if (ball.x + ball.radius > canvas.width) {
+                player1.score++;
+                updateDifficulty();
+                resetBall();
+            }
+        }
+
+        let powerUps = [];
+        const powerUpTypes = [
+            { name: 'Grow Paddle', symbol: 'P+', type: 'player', isImmediate: false },
+            { name: 'Shrink Paddle', symbol: 'P-', type: 'player', isImmediate: false },
+            { name: 'Slow Ball', symbol: 'S', type: 'ball', isImmediate: true },
+            { name: 'Fast Ball', symbol: 'F', type: 'ball', isImmediate: true },
+            { name: 'Shrink Opponent', symbol: 'O-', type: 'opponent', isImmediate: false },
+            { name: 'Multi-ball', symbol: 'M', type: 'ball', isImmediate: true },
+            { name: 'Invisible Ball', symbol: 'I', type: 'ball', isImmediate: true },
+            { name: 'Freeze Opponent', symbol: 'O>F', type: 'opponent', isImmediate: false },
+        ];
+
+        function spawnPowerUp() {
+            if (powerUps.length > 0) return;
+
+            const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            const powerUp = {
+                x: Math.random() * (canvas.width - 200) + 100,
+                y: Math.random() * (canvas.height - 100) + 50,
+                radius: 15,
+                type: type.name,
+                symbol: type.symbol,
+                effectType: type.type
+            };
+            powerUps.push(powerUp);
+        }
+
+        setInterval(spawnPowerUp, 10000);
+
+        let difficulty = 1;
+        let cpuLevel = 0.02;
+
+        function updateDifficulty() {
+            const totalScore = player1.score + player2.score;
+            if (totalScore > 0 && totalScore % 2 === 0) {
+                if (difficulty < 5) {
+                    difficulty++;
+                    cpuLevel = difficulty * 0.02;
+                }
+            }
+        }
+
+        // Render function
+        function render() {
+            // Clear the canvas
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#0d0d0d';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+            if (countdown > 0) {
+                ctx.font = '100px Orbitron';
+                drawText(countdown, canvas.width / 2 - 30, canvas.height / 2 + 35, '#00ffde');
+            }
+
+            // Draw score
+            const scoreDiv = document.getElementById('score');
+            scoreDiv.textContent = `${player1.score} - ${player2.score}`;
+
+            // Draw paddles
+            drawRect(player1.x, player1.y, player1.width, player1.height, player1.color);
+            drawRect(player2.x, player2.y, player2.width, player2.height, player2.color);
+
+            // Draw power-ups
+            powerUps.forEach(powerUp => {
+                drawCircle(powerUp.x, powerUp.y, powerUp.radius, '#ff0');
+                drawText(powerUp.symbol, powerUp.x - 10, powerUp.y + 10, '#000');
+            });
+
+            // Draw ball
+            drawCircle(ball.x, ball.y, ball.radius, ball.color);
+        }
+
+        function handlePowerUpCollection(powerUp, player, index) {
+            if (powerUp.isImmediate) {
+                activatePowerUp(powerUp, player);
+            } else {
+                if (player.powerUps.length < 2) {
+                    player.powerUps.push(powerUp);
+                }
+            }
+            powerUps.splice(index, 1);
+        }
+
+        const activeEffects = {
+            player1: {},
+            player2: {}
+        };
+
+        function activatePowerUp(powerUp, player) {
+            const opponent = (player === player1) ? player2 : player1;
+            const effectId = Date.now();
+
+            switch (powerUp.type) {
+                case 'Grow Paddle':
+                    applyEffect(player, 'height', 150, 5000, effectId);
+                    break;
+                case 'Shrink Paddle':
+                    applyEffect(player, 'height', 50, 5000, effectId);
+                    break;
+                case 'Slow Ball':
+                    applyEffect(ball, 'speed', 3, 5000, effectId);
+                    break;
+                case 'Fast Ball':
+                    applyEffect(ball, 'speed', 10, 5000, effectId);
+                    break;
+                case 'Shrink Opponent':
+                    applyEffect(opponent, 'height', 50, 5000, effectId);
+                    break;
+                case 'Invisible Ball':
+                    const interval = setInterval(() => {
+                        ball.color = ball.color === 'transparent' ? '#ff00ff' : 'transparent';
+                    }, 200);
+                    setTimeout(() => {
+                        clearInterval(interval);
+                        ball.color = '#ff00ff';
+                    }, 3000);
+                    break;
+                case 'Freeze Opponent':
+                    applyEffect(opponent, 'frozen', true, 2000, effectId);
+                    break;
+                // Cases for new powerups will be added here
+            }
+        }
+
+        function applyEffect(target, property, value, duration, effectId) {
+            const originalValue = target[property];
+            const effectKey = `${property}-${effectId}`;
+
+            // If there's an existing effect on the same property, don't stack, just overwrite.
+            // A more advanced implementation might stack or refresh timers.
+            target[property] = value;
+
+            const timeoutId = setTimeout(() => {
+                // Only revert if this specific effect is still the last one applied.
+                if (activeEffects[target === player1 ? 'player1' : 'player2'][property] === effectKey) {
+                    target[property] = originalValue;
+                    delete activeEffects[target === player1 ? 'player1' : 'player2'][property];
+                }
+            }, duration);
+
+            activeEffects[target === player1 ? 'player1' : 'player2'][property] = effectKey;
+        }
+
+        // Collision detection function
+        function collision(b, p) {
+            b.top = b.y - b.radius;
+            b.bottom = b.y + b.radius;
+            b.left = b.x - b.radius;
+            b.right = b.x + b.radius;
+
+            p.top = p.y;
+            p.bottom = p.y + p.height;
+            p.left = p.x;
+            p.right = p.x + p.width;
+
+            return b.right > p.left && b.bottom > p.top && b.left < p.right && b.top < p.bottom;
+        }
+
+        let lastGoalTime = Date.now();
+
+        // Reset ball function
+        function resetBall() {
+            isGameStarted = false;
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speed = 5;
+            // Change direction to go towards the player who won the point
+            ball.velocityX = -ball.velocityX;
+            lastGoalTime = Date.now();
+            startRound();
+        }
+
+        let gameMode = ''; // '1p' or '2p'
+        let countdown = 3;
+        let isGameStarted = false;
+
+        document.getElementById('1p').addEventListener('click', () => {
+            gameMode = '1p';
+            startGame();
+        });
+
+        document.getElementById('2p').addEventListener('click', () => {
+            gameMode = '2p';
+            startGame();
+        });
+
+        function startRound() {
+            countdown = 3;
+            const interval = setInterval(() => {
+                countdown--;
+                if (countdown === 0) {
+                    clearInterval(interval);
+                    isGameStarted = true;
+                }
+            }, 1000);
+        }
+
+        function startGame() {
+            document.getElementById('options').style.display = 'none';
+            startRound();
+            gameLoop();
+        }
+
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            delete keys[e.key];
+            if (e.key === 'q' && player1.powerUps.length > 0) {
+                const powerUp = player1.powerUps.shift();
+                activatePowerUp(powerUp, player1);
+            }
+            if (e.key === 'p' && gameMode === '2p' && player2.powerUps.length > 0) {
+                const powerUp = player2.powerUps.shift();
+                activatePowerUp(powerUp, player2);
+            }
+        });
+
+        function handleInput() {
+            if (!player1.frozen) {
+                if ('w' in keys) {
+                    player1.y -= 5;
+                }
+                if ('s' in keys) {
+                    player1.y += 5;
+                }
+            }
+            if (gameMode === '2p' && !player2.frozen) {
+                if ('ArrowUp' in keys) {
+                    player2.y -= 5;
+                }
+                if ('ArrowDown' in keys) {
+                    player2.y += 5;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
