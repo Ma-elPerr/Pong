@@ -27,8 +27,9 @@
         }
 
         #game-container {
-            width: 90%;
+            width: 95vw;
             max-width: 800px;
+            max-height: 95vh;
         }
 
         canvas {
@@ -69,6 +70,16 @@
             color: #0d0d0d;
             box-shadow: 0 0 15px #00ffde;
         }
+
+        #instructions {
+            display: none;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #ff00ff;
+        }
+        #instructions p {
+            margin: 2px;
+        }
     </style>
 </head>
 <body>
@@ -80,6 +91,11 @@
     <div id="score">0 - 0</div>
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
+    </div>
+    <div id="instructions">
+        <p><strong>Controls:</strong></p>
+        <p><strong>Keyboard:</strong> P1: W/S | P2: Up/Down | Power-ups: Q/P</p>
+        <p><strong>Mobile:</strong> Touch left/right side to move paddle.</p>
     </div>
     <div id="credits">Created by Ma'el Perr</div>
     <script>
@@ -106,7 +122,7 @@
         const basePaddleWidth = 10;
         const basePaddleHeight = 100;
         const baseBallRadius = 10;
-        const baseSpeed = 5;
+        const baseSpeed = 4;
 
         const player1 = {
             x: 0,
@@ -217,6 +233,10 @@
                 ball.velocityY = ball.speed * Math.sin(angleRad);
             }
 
+            // Power-up timeout
+            const a = powerUps.length;
+            powerUps = powerUps.filter(p => Date.now() - p.spawnTime < 8000);
+
             // Power-up collision
             powerUps.forEach((powerUp, index) => {
                 const scaledPowerUp = {
@@ -275,7 +295,8 @@
                 radius: 15,
                 type: type.name,
                 symbol: type.symbol,
-                effectType: type.type
+                effectType: type.type,
+                spawnTime: Date.now()
             };
             powerUps.push(powerUp);
         }
@@ -368,10 +389,10 @@
                     setTimeout(() => {
                         clearInterval(interval);
                         ball.color = '#ff00ff';
-                    }, 3000);
+                    }, 2000);
                     break;
                 case 'Freeze Opponent':
-                    applyEffect(opponent, 'frozen', true, 2000, effectId);
+                    applyEffect(opponent, 'frozen', true, 1500, effectId);
                     break;
                 // Cases for new powerups will be added here
             }
@@ -416,9 +437,9 @@
         // Reset ball function
         function resetBall() {
             isGameStarted = false;
-            ball.x = canvas.width / 2;
-            ball.y = canvas.height / 2;
-            ball.speed = 5;
+            ball.x = baseWidth / 2;
+            ball.y = baseHeight / 2;
+            ball.speed = baseSpeed;
             // Change direction to go towards the player who won the point
             ball.velocityX = -ball.velocityX;
             lastGoalTime = Date.now();
@@ -452,6 +473,7 @@
 
         function startGame() {
             document.getElementById('options').style.display = 'none';
+            document.getElementById('instructions').style.display = 'block';
             startRound();
             gameLoop();
         }
