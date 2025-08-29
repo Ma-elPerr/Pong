@@ -26,10 +26,17 @@
             text-shadow: 0 0 10px #00ffde, 0 0 20px #00ffde, 0 0 30px #00ffde;
         }
 
+        #game-container {
+            width: 90%;
+            max-width: 800px;
+        }
+
         canvas {
             background-color: #0d0d0d;
             border: 2px solid #00ffde;
             box-shadow: 0 0 20px #00ffde;
+            width: 100%;
+            aspect-ratio: 4 / 3;
         }
 
         #score {
@@ -71,21 +78,41 @@
         <button id="2p">2 Players</button>
     </div>
     <div id="score">0 - 0</div>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
     <div id="credits">Created by Ma'el Perr</div>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Game objects
-        const paddleWidth = 10;
-        const paddleHeight = 100;
+        const baseWidth = 800;
+        const baseHeight = 600;
+        let scaleX = 1;
+        let scaleY = 1;
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            scaleX = canvas.width / baseWidth;
+            scaleY = canvas.height / baseHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+
+        // Game objects (base sizes)
+        const basePaddleWidth = 10;
+        const basePaddleHeight = 100;
+        const baseBallRadius = 10;
+        const baseSpeed = 5;
 
         const player1 = {
             x: 0,
-            y: canvas.height / 2 - paddleHeight / 2,
-            width: paddleWidth,
-            height: paddleHeight,
+            y: baseHeight / 2 - basePaddleHeight / 2,
+            width: basePaddleWidth,
+            height: basePaddleHeight,
             color: '#00ffde',
             score: 0,
             powerUps: [],
@@ -93,10 +120,10 @@
         };
 
         const player2 = {
-            x: canvas.width - paddleWidth,
-            y: canvas.height / 2 - paddleHeight / 2,
-            width: paddleWidth,
-            height: paddleHeight,
+            x: baseWidth - basePaddleWidth,
+            y: baseHeight / 2 - basePaddleHeight / 2,
+            width: basePaddleWidth,
+            height: basePaddleHeight,
             color: '#00ffde',
             score: 0,
             powerUps: [],
@@ -104,12 +131,12 @@
         };
 
         const ball = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            radius: 10,
-            speed: 5,
-            velocityX: 5,
-            velocityY: 5,
+            x: baseWidth / 2,
+            y: baseHeight / 2,
+            radius: baseBallRadius,
+            speed: baseSpeed,
+            velocityX: baseSpeed,
+            velocityY: baseSpeed,
             color: '#ff00ff'
         };
 
@@ -117,26 +144,25 @@
         function drawRect(x, y, w, h, color) {
             ctx.fillStyle = color;
             ctx.shadowColor = color;
-            ctx.shadowBlur = 20;
-            ctx.fillRect(x, y, w, h);
+            ctx.shadowBlur = 20 * scaleX;
+            ctx.fillRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY);
         }
 
         function drawCircle(x, y, r, color) {
             ctx.fillStyle = color;
             ctx.shadowColor = color;
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 20 * scaleX;
             ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2, false);
+            ctx.arc(x * scaleX, y * scaleY, r * scaleX, 0, Math.PI * 2, false);
             ctx.closePath();
             ctx.fill();
         }
 
-        function drawText(text, x, y, color) {
+        function drawText(text, x, y, color, size) {
             ctx.fillStyle = color;
-            if (!countdown > 0) {
-                ctx.font = '45px Orbitron';
-            }
-            ctx.fillText(text, x, y);
+            const fontSize = size * scaleX;
+            ctx.font = `${fontSize}px Orbitron`;
+            ctx.fillText(text, x * scaleX, y * scaleY);
         }
 
         // Game loop
@@ -159,9 +185,9 @@
 
             // Prevent paddles from going out of bounds
             if (player1.y < 0) player1.y = 0;
-            if (player1.y + player1.height > canvas.height) player1.y = canvas.height - player1.height;
+            if (player1.y + player1.height > baseHeight) player1.y = baseHeight - player1.height;
             if (player2.y < 0) player2.y = 0;
-            if (player2.y + player2.height > canvas.height) player2.y = canvas.height - player2.height;
+            if (player2.y + player2.height > baseHeight) player2.y = baseHeight - player2.height;
 
             // Increase ball speed over time
             if (Date.now() - lastGoalTime > 5000) {
@@ -172,12 +198,12 @@
             ball.y += ball.velocityY;
 
             // Ball collision with top and bottom walls
-            if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) {
+            if (ball.y + ball.radius > baseHeight || ball.y - ball.radius < 0) {
                 ball.velocityY = -ball.velocityY;
             }
 
             // Ball collision with paddles
-            let player = (ball.x < canvas.width / 2) ? player1 : player2;
+            let player = (ball.x < baseWidth / 2) ? player1 : player2;
             if (collision(ball, player)) {
                 // Ball hit the paddle
                 let collidePoint = (ball.y - (player.y + player.height / 2));
@@ -185,7 +211,7 @@
 
                 let angleRad = (Math.PI / 4) * collidePoint;
 
-                let direction = (ball.x < canvas.width / 2) ? 1 : -1;
+                let direction = (ball.x < baseWidth / 2) ? 1 : -1;
 
                 ball.velocityX = direction * ball.speed * Math.cos(angleRad);
                 ball.velocityY = ball.speed * Math.sin(angleRad);
@@ -193,9 +219,19 @@
 
             // Power-up collision
             powerUps.forEach((powerUp, index) => {
-                if (collision(powerUp, player1)) {
+                const scaledPowerUp = {
+                    x: powerUp.x,
+                    y: powerUp.y,
+                    width: powerUp.radius * 2,
+                    height: powerUp.radius * 2,
+                    left: powerUp.x - powerUp.radius,
+                    right: powerUp.x + powerUp.radius,
+                    top: powerUp.y - powerUp.radius,
+                    bottom: powerUp.y + powerUp.radius
+                };
+                if (collision(scaledPowerUp, player1)) {
                     handlePowerUpCollection(powerUp, player1, index);
-                } else if (collision(powerUp, player2)) {
+                } else if (collision(scaledPowerUp, player2)) {
                     handlePowerUpCollection(powerUp, player2, index);
                 }
             });
@@ -210,7 +246,7 @@
                 player2.score++;
                 updateDifficulty();
                 resetBall();
-            } else if (ball.x + ball.radius > canvas.width) {
+            } else if (ball.x + ball.radius > baseWidth) {
                 player1.score++;
                 updateDifficulty();
                 resetBall();
@@ -234,8 +270,8 @@
 
             const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
             const powerUp = {
-                x: Math.random() * (canvas.width - 200) + 100,
-                y: Math.random() * (canvas.height - 100) + 50,
+                x: Math.random() * (baseWidth - 200) + 100,
+                y: Math.random() * (baseHeight - 100) + 50,
                 radius: 15,
                 type: type.name,
                 symbol: type.symbol,
@@ -267,9 +303,8 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 
-            if (countdown > 0) {
-                ctx.font = '100px Orbitron';
-                drawText(countdown, canvas.width / 2 - 30, canvas.height / 2 + 35, '#00ffde');
+            if (!isGameStarted && countdown > 0) {
+                drawText(countdown, baseWidth / 2 - 45, baseHeight / 2 + 35, '#00ffde', 100);
             }
 
             // Draw score
@@ -283,7 +318,7 @@
             // Draw power-ups
             powerUps.forEach(powerUp => {
                 drawCircle(powerUp.x, powerUp.y, powerUp.radius, '#ff0');
-                drawText(powerUp.symbol, powerUp.x - 10, powerUp.y + 10, '#000');
+                drawText(powerUp.symbol, powerUp.x - powerUp.radius / 2 - 5, powerUp.y + powerUp.radius / 2, '#000', 30);
             });
 
             // Draw ball
@@ -436,6 +471,34 @@
                 activatePowerUp(powerUp, player2);
             }
         });
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touches = e.changedTouches;
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const touchY = (touch.clientY - canvas.offsetTop) / scaleY;
+
+                if (gameMode === '1p') {
+                    if (!player1.frozen) {
+                        player1.y = touchY - player1.height / 2;
+                    }
+                } else { // 2p mode
+                    if (touch.clientX < window.innerWidth / 2) {
+                        if (!player1.frozen) {
+                            player1.y = touchY - player1.height / 2;
+                        }
+                    } else {
+                        if (!player2.frozen) {
+                            player2.y = touchY - player2.height / 2;
+                        }
+                    }
+                }
+            }
+        }
+
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('touchmove', handleTouch);
 
         function handleInput() {
             if (!player1.frozen) {
